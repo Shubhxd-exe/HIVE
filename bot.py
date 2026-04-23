@@ -686,6 +686,27 @@ async def on_message(message):
         await message.reply(embed=embed, view=BotInfoView(), mention_author=False)
 
     await bot.process_commands(message)
+
+@bot.command()
+@commands.has_permissions(manage_roles=True)
+async def role(ctx, member: discord.Member, *, role_name: str):
+    role = discord.utils.get(ctx.guild.roles, name=role_name)
+
+    if role is None:
+        await ctx.send("❌ Role not found!")
+        return
+
+    if role in member.roles:
+        await ctx.send(f"⚠️ {member.mention} already has this role.")
+        return
+
+    try:
+        await member.add_roles(role)
+        await ctx.send(f"✅ Gave {role.name} to {member.mention}")
+    except discord.Forbidden:
+        await ctx.send("❌ I don't have permission to give that role.")
+    except Exception as e:
+        await ctx.send(f"Error: {e}")
 # ══════════════════════════════════════════════════════════════════════════════
 # RUN
 # ══════════════════════════════════════════════════════════════════════════════
