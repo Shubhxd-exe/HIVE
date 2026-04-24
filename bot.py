@@ -233,7 +233,7 @@ async def kick(ctx, member: discord.Member, *, reason: str = "No reason provided
     await member.kick(reason=reason)
     e = success_embed(
         "Member Kicked",
-        f"**{member}** has been kicked.\n\n📝 **Reason:** {reason}",
+        f"**{member}** <:136828greentick:1497256669648781433>has been kicked.\n\n📝 **Reason:** {reason}",
         footer=f"Kicked by {ctx.author}"
     )
     e.set_thumbnail(url=member.display_avatar.url)
