@@ -844,7 +844,6 @@ class EmbedBuilderView(discord.ui.View):
             embed=success_embed("Embed Deleted", f"Embed **{self.embed_name}** has been deleted."),
             ephemeral=True
         )
-        self.stop()
 # embeds
 
 class EmbedBuilderView(discord.ui.View):
@@ -896,7 +895,7 @@ class EmbedBuilderView(discord.ui.View):
         except asyncio.TimeoutError:
             await self.ctx.send("❌ Timed out", delete_after=5)
 
-    # 🔥 BUTTONS (Mimu style)
+    # 🔥 BUTTON UI (Mimu style)
 
     @discord.ui.button(label="edit basic information", style=discord.ButtonStyle.secondary, row=0)
     async def basic(self, interaction, button):
@@ -932,89 +931,7 @@ class EmbedBuilderView(discord.ui.View):
         pass
 
 
-# ✅ OUTSIDE class (IMPORTANT)
-class EmbedDropdown(discord.ui.Select):
-    def __init__(self, ctx, embed_name, data):
-        self.ctx = ctx
-        self.embed_name = embed_name
-        self.data = data
-
-        options = [
-            discord.SelectOption(label="Edit Title", emoji="✏️"),
-            discord.SelectOption(label="Edit Description", emoji="📝"),
-            discord.SelectOption(label="Edit Color", emoji="🎨"),
-            discord.SelectOption(label="Edit Author", emoji="👤"),
-            discord.SelectOption(label="Edit Footer", emoji="📋"),
-            discord.SelectOption(label="Edit Thumbnail", emoji="🖼️"),
-            discord.SelectOption(label="Edit Image", emoji="🌄"),
-            discord.SelectOption(label="Preview", emoji="👁️"),
-            discord.SelectOption(label="Delete Embed", emoji="🗑️"),
-        ]
-
-        super().__init__(
-            placeholder="Select what you want to edit...",
-            options=options
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        choice = self.values[0]
-
-        def check(m):
-            return m.author == self.ctx.author and m.channel == self.ctx.channel
-
-        async def ask(field, label):
-            await interaction.response.send_message(
-                f"✏️ Send new **{label}** or type `cancel`",
-                ephemeral=True
-            )
-            try:
-                msg = await bot.wait_for("message", check=check, timeout=60)
-
-                if msg.content.lower() == "cancel":
-                    return
-
-                self.data[field] = msg.content
-                embed_store.setdefault(self.ctx.guild.id, {})[self.embed_name] = self.data
-
-                await self.ctx.send(f"✅ {label} updated!", delete_after=5)
-
-            except asyncio.TimeoutError:
-                await self.ctx.send("❌ Timed out", delete_after=5)
-
-        if choice == "Edit Title":
-            await ask("title", "Title")
-
-        elif choice == "Edit Description":
-            await ask("description", "Description")
-
-        elif choice == "Edit Color":
-            await ask("color", "Color")
-
-        elif choice == "Edit Author":
-            await ask("author_name", "Author")
-
-        elif choice == "Edit Footer":
-            await ask("footer", "Footer")
-
-        elif choice == "Edit Thumbnail":
-            await ask("thumbnail_url", "Thumbnail URL")
-
-        elif choice == "Edit Image":
-            await ask("image_url", "Image URL")
-
-        elif choice == "Preview":
-            view = EmbedBuilderView(self.ctx, self.embed_name, self.data)
-            await interaction.response.send_message(
-                embed=view.build_embed(),
-                ephemeral=True
-            )
-
-        elif choice == "Delete Embed":
-            embed_store[self.ctx.guild.id].pop(self.embed_name, None)
-            await interaction.response.send_message("🗑️ Embed deleted", ephemeral=True)
-
-
-# ✅ COMMANDS (OUTSIDE classes)
+# ✅ COMMANDS
 
 @bot.command()
 async def embed_create(ctx, *, name: str):
