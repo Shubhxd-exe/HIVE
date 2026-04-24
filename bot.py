@@ -853,7 +853,6 @@ class EmbedBuilderView(discord.ui.View):
         self.ctx = ctx
         self.embed_name = embed_name
         self.data = data
-        self.add_item(EmbedDropdown(ctx, embed_name, data))
 
     def build_embed(self):
         color = int(self.data.get("color", "5865F2"), 16)
@@ -873,6 +872,64 @@ class EmbedBuilderView(discord.ui.View):
             e.set_image(url=self.data["image_url"])
 
         return e
+
+    async def ask(self, interaction, field, label):
+        await interaction.response.send_message(
+            f"✏️ Send new **{label}** or type `cancel`",
+            ephemeral=True
+        )
+
+        def check(m):
+            return m.author == self.ctx.author and m.channel == self.ctx.channel
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=60)
+
+            if msg.content.lower() == "cancel":
+                return
+
+            self.data[field] = msg.content
+            embed_store.setdefault(self.ctx.guild.id, {})[self.embed_name] = self.data
+
+            await self.ctx.send(f"✅ {label} updated!", delete_after=5)
+
+        except asyncio.TimeoutError:
+            await self.ctx.send("❌ Timed out", delete_after=5)
+
+    # 🔥 BUTTONS (Mimu style)
+
+    @discord.ui.button(label="edit basic information", style=discord.ButtonStyle.secondary, row=0)
+    async def basic(self, interaction, button):
+        await self.ask(interaction, "description", "Description / Title / Color")
+
+    @discord.ui.button(label="edit author", style=discord.ButtonStyle.secondary, row=1)
+    async def author(self, interaction, button):
+        await self.ask(interaction, "author_name", "Author")
+
+    @discord.ui.button(label="edit footer", style=discord.ButtonStyle.secondary, row=1)
+    async def footer(self, interaction, button):
+        await self.ask(interaction, "footer", "Footer")
+
+    @discord.ui.button(label="edit images", style=discord.ButtonStyle.secondary, row=1)
+    async def images(self, interaction, button):
+        await self.ask(interaction, "image_url", "Image URL")
+
+    @discord.ui.button(label="preview", style=discord.ButtonStyle.primary, row=2)
+    async def preview(self, interaction, button):
+        await interaction.response.send_message(
+            embed=self.build_embed(),
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="delete", style=discord.ButtonStyle.danger, row=2)
+    async def delete(self, interaction, button):
+        embed_store[self.ctx.guild.id].pop(self.embed_name, None)
+        await interaction.response.send_message("🗑️ Deleted", ephemeral=True)
+        self.stop()
+
+    @discord.ui.button(label="need help? join support server!", style=discord.ButtonStyle.link, url="https://discord.gg/yourlink", row=3)
+    async def support(self, interaction, button):
+        pass
 
 
 # ✅ OUTSIDE class (IMPORTANT)
