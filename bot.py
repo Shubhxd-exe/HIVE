@@ -39,7 +39,7 @@ COLOR_GOLD     = 0xF1C40F
 
 def success_embed(title, desc=None, footer=None):
     e = discord.Embed(title=f"✅  {title}", description=desc, color=COLOR_SUCCESS)
-    e.set_footer(text=footer or "ModBot • made with ❤️")
+    e.set_footer(text=footer or "HIVE • made with ❤️")
     e.timestamp = datetime.datetime.utcnow()
     return e
 
@@ -175,7 +175,7 @@ async def help_cmd(ctx, category: str = None):
 
     # Main help menu
     e = discord.Embed(
-        title="✨  Hey, I'm ModBot™",
+        title="<:314514githubcopilot:1497258026908909649>  Hey, I'm HIVE™",
         description=(
             f"A **powerful moderation & utility bot** for your server!\n\n"
             f"• **Prefix:** `{PREFIX}`\n"
@@ -219,7 +219,7 @@ warnings_db: dict[int, dict[int, list]] = {}  # guild_id → {user_id: [reasons]
 async def ban(ctx, member: discord.Member, *, reason: str = "No reason provided"):
     await member.ban(reason=reason)
     e = success_embed(
-        "Member Banned",
+        " <:136828greentick:1497256669648781433> Member Banned",
         f"**{member}** has been banned.\n\n📝 **Reason:** {reason}",
         footer=f"Banned by {ctx.author}"
     )
@@ -257,7 +257,7 @@ async def timeout(ctx, member: discord.Member, duration: str, *, reason: str = "
     await member.timeout(until, reason=reason)
     e = success_embed(
         "Member Timed Out",
-        f"**{member}** has been timed out for **{duration}**.\n\n📝 **Reason:** {reason}",
+        f"**{member}** has been timed out for <:136828greentick:1497256669648781433> **{duration}**.\n\n📝 **Reason:** {reason}",
         footer=f"Timed out by {ctx.author}"
     )
     await ctx.send(embed=e)
@@ -267,7 +267,7 @@ async def timeout(ctx, member: discord.Member, duration: str, *, reason: str = "
 @commands.has_permissions(moderate_members=True)
 async def untimeout(ctx, member: discord.Member):
     await member.timeout(None)
-    await ctx.send(embed=success_embed("Timeout Removed", f"**{member}**'s timeout has been removed."))
+    await ctx.send(embed=success_embed("Timeout Removed", f"**{member}**'s timeout has been removed <:136828greentick:1497256669648781433>."))
 
 
 @bot.command()
@@ -277,7 +277,7 @@ async def warn(ctx, member: discord.Member, *, reason: str = "No reason provided
     warnings_db.setdefault(gid, {}).setdefault(uid, []).append(reason)
     count = len(warnings_db[gid][uid])
     e = discord.Embed(
-        title="⚠️  Member Warned",
+        title="<:5750radiationsymbol:1497258690057732240>  Member Warned",
         description=f"**{member}** has been warned.\n\n📝 **Reason:** {reason}\n📊 **Total Warnings:** {count}",
         color=COLOR_WARN
     )
