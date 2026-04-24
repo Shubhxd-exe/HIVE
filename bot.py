@@ -845,8 +845,8 @@ class EmbedBuilderView(discord.ui.View):
             ephemeral=True
         )
         self.stop()
-
 # embeds
+
 class EmbedBuilderView(discord.ui.View):
     def __init__(self, ctx, embed_name, data):
         super().__init__(timeout=300)
@@ -873,7 +873,10 @@ class EmbedBuilderView(discord.ui.View):
             e.set_image(url=self.data["image_url"])
 
         return e
-        class EmbedDropdown(discord.ui.Select):
+
+
+# ✅ OUTSIDE class (IMPORTANT)
+class EmbedDropdown(discord.ui.Select):
     def __init__(self, ctx, embed_name, data):
         self.ctx = ctx
         self.embed_name = embed_name
@@ -921,7 +924,6 @@ class EmbedBuilderView(discord.ui.View):
             except asyncio.TimeoutError:
                 await self.ctx.send("❌ Timed out", delete_after=5)
 
-        # ACTIONS
         if choice == "Edit Title":
             await ask("title", "Title")
 
@@ -929,7 +931,7 @@ class EmbedBuilderView(discord.ui.View):
             await ask("description", "Description")
 
         elif choice == "Edit Color":
-            await ask("color", "Color (hex like FF0000)")
+            await ask("color", "Color")
 
         elif choice == "Edit Author":
             await ask("author_name", "Author")
@@ -953,7 +955,11 @@ class EmbedBuilderView(discord.ui.View):
         elif choice == "Delete Embed":
             embed_store[self.ctx.guild.id].pop(self.embed_name, None)
             await interaction.response.send_message("🗑️ Embed deleted", ephemeral=True)
-            @bot.command()
+
+
+# ✅ COMMANDS (OUTSIDE classes)
+
+@bot.command()
 async def embed_create(ctx, *, name: str):
     name = name.lower()
 
@@ -979,7 +985,9 @@ async def embed_create(ctx, *, name: str):
         embed=preview,
         view=view
     )
-    @bot.command()
+
+
+@bot.command()
 async def embed_public(ctx, name: str, channel: discord.TextChannel = None):
     name = name.lower()
     guild_embeds = embed_store.get(ctx.guild.id, {})
