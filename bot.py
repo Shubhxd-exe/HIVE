@@ -9,7 +9,7 @@ import re
 from dotenv import load_dotenv
 
 load_dotenv()
-
+embed_store = {}
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 PREFIX    = ","
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -846,119 +846,158 @@ class EmbedBuilderView(discord.ui.View):
         )
         self.stop()
 
+# embeds
+class EmbedBuilderView(discord.ui.View):
+    def __init__(self, ctx, embed_name, data):
+        super().__init__(timeout=300)
+        self.ctx = ctx
+        self.embed_name = embed_name
+        self.data = data
+        self.add_item(EmbedDropdown(ctx, embed_name, data))
 
-# â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    def build_embed(self):
+        color = int(self.data.get("color", "5865F2"), 16)
+        e = discord.Embed(
+            title=self.data.get("title") or "",
+            description=self.data.get("description") or "",
+            color=color
+        )
 
-@bot.group(name="embed", invoke_without_command=True)
-async def embed_group(ctx):
-    """Embed system â€” use ,embed create / public / list / delete / preview"""
-    e = info_embed(
-        "ðŸ“‹  Embed System",
-        f"`{PREFIX}embed create <name>` â€” create a new embed\n"
-        f"`{PREFIX}embed public <name> [#channel]` â€” send embed to channel\n"
-        f"`{PREFIX}embed list` â€” list all saved embeds\n"
-        f"`{PREFIX}embed preview <name>` â€” preview an embed\n"
-        f"`{PREFIX}embed delete <name>` â€” delete a saved embed\n\n"
-        f"**In description/title use `{{user}}` to ping the member**\n\n"
-        f"**Example:**\n`{PREFIX}embed create greet`\n`{PREFIX}embed public greet #welcome`",
-        color=COLOR_PURPLE
-    )
-    await ctx.send(embed=e)
+        if self.data.get("author_name"):
+            e.set_author(name=self.data["author_name"])
+        if self.data.get("footer"):
+            e.set_footer(text=self.data["footer"])
+        if self.data.get("thumbnail_url"):
+            e.set_thumbnail(url=self.data["thumbnail_url"])
+        if self.data.get("image_url"):
+            e.set_image(url=self.data["image_url"])
 
+        return e
+        class EmbedDropdown(discord.ui.Select):
+    def __init__(self, ctx, embed_name, data):
+        self.ctx = ctx
+        self.embed_name = embed_name
+        self.data = data
 
-@embed_group.command(name="create")
-@commands.has_permissions(manage_messages=True)
+        options = [
+            discord.SelectOption(label="Edit Title", emoji="✏️"),
+            discord.SelectOption(label="Edit Description", emoji="📝"),
+            discord.SelectOption(label="Edit Color", emoji="🎨"),
+            discord.SelectOption(label="Edit Author", emoji="👤"),
+            discord.SelectOption(label="Edit Footer", emoji="📋"),
+            discord.SelectOption(label="Edit Thumbnail", emoji="🖼️"),
+            discord.SelectOption(label="Edit Image", emoji="🌄"),
+            discord.SelectOption(label="Preview", emoji="👁️"),
+            discord.SelectOption(label="Delete Embed", emoji="🗑️"),
+        ]
+
+        super().__init__(
+            placeholder="Select what you want to edit...",
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        choice = self.values[0]
+
+        def check(m):
+            return m.author == self.ctx.author and m.channel == self.ctx.channel
+
+        async def ask(field, label):
+            await interaction.response.send_message(
+                f"✏️ Send new **{label}** or type `cancel`",
+                ephemeral=True
+            )
+            try:
+                msg = await bot.wait_for("message", check=check, timeout=60)
+
+                if msg.content.lower() == "cancel":
+                    return
+
+                self.data[field] = msg.content
+                embed_store.setdefault(self.ctx.guild.id, {})[self.embed_name] = self.data
+
+                await self.ctx.send(f"✅ {label} updated!", delete_after=5)
+
+            except asyncio.TimeoutError:
+                await self.ctx.send("❌ Timed out", delete_after=5)
+
+        # ACTIONS
+        if choice == "Edit Title":
+            await ask("title", "Title")
+
+        elif choice == "Edit Description":
+            await ask("description", "Description")
+
+        elif choice == "Edit Color":
+            await ask("color", "Color (hex like FF0000)")
+
+        elif choice == "Edit Author":
+            await ask("author_name", "Author")
+
+        elif choice == "Edit Footer":
+            await ask("footer", "Footer")
+
+        elif choice == "Edit Thumbnail":
+            await ask("thumbnail_url", "Thumbnail URL")
+
+        elif choice == "Edit Image":
+            await ask("image_url", "Image URL")
+
+        elif choice == "Preview":
+            view = EmbedBuilderView(self.ctx, self.embed_name, self.data)
+            await interaction.response.send_message(
+                embed=view.build_embed(),
+                ephemeral=True
+            )
+
+        elif choice == "Delete Embed":
+            embed_store[self.ctx.guild.id].pop(self.embed_name, None)
+            await interaction.response.send_message("🗑️ Embed deleted", ephemeral=True)
+            @bot.command()
 async def embed_create(ctx, *, name: str):
-    """
-    ,embed create <name>
-    Creates a new embed with interactive buttons to customize it.
-    """
-    name = name.strip().lower()
-    guild_embeds = embed_store.setdefault(ctx.guild.id, {})
+    name = name.lower()
 
-    if name in guild_embeds:
-        # Load existing for re-editing
-        data = guild_embeds[name]
-        msg_text = f"Embed **{name}** already exists â€” loading it for editing."
-    else:
-        # Brand new embed with defaults
-        data = {
-            "title":         f"âœ¨ {name.capitalize()}",
-            "description":   "Welcome {user} to the server! ðŸŽ‰",
-            "color":         "9B59B6",
-            "footer":        "Stay w us <3",
-            "author_name":   "",
-            "thumbnail_url": "",
-            "image_url":     "",
-        }
-        guild_embeds[name] = data
-        msg_text = f"Embed **{name}** created! Use the buttons below to customize it."
+    data = {
+        "title": f"✨ {name}",
+        "description": "Welcome {user}",
+        "color": "5865F2",
+        "footer": "",
+        "author_name": "",
+        "thumbnail_url": "",
+        "image_url": "",
+    }
 
-    # Build current preview embed
-    color = int(data.get("color", "9B59B6"), 16)
-    preview = discord.Embed(
-        title       = data.get("title", ""),
-        description = data.get("description", "").replace("{user}", ctx.author.mention),
-        color       = color,
-    )
-    if data.get("author_name"):
-        preview.set_author(name=data["author_name"])
-    if data.get("footer"):
-        preview.set_footer(text=data["footer"])
-    if data.get("thumbnail_url"):
-        preview.set_thumbnail(url=data["thumbnail_url"])
-    if data.get("image_url"):
-        preview.set_image(url=data["image_url"])
-    preview.timestamp = datetime.datetime.utcnow()
-
-    info = discord.Embed(
-        title       = f"ðŸ› ï¸  Embed Builder â€” `{name}`",
-        description = (
-            f"{msg_text}\n\n"
-            f"**`{{user}}`** in title/description â†’ pings the member\n"
-            f"Use `{PREFIX}embed public {name} #channel` to send it anywhere."
-        ),
-        color=COLOR_PURPLE
-    )
-    info.set_footer(text="Buttons expire after 5 minutes of inactivity")
-    info.timestamp = datetime.datetime.utcnow()
+    embed_store.setdefault(ctx.guild.id, {})[name] = data
 
     view = EmbedBuilderView(ctx, name, data)
-    await ctx.send(embeds=[info, preview], view=view)
 
+    preview = view.build_embed()
+    preview.description = preview.description.replace("{user}", ctx.author.mention)
 
-@embed_group.command(name="public")
-@commands.has_permissions(manage_messages=True)
-async def embed_public(ctx, name: str, channel: discord.TextChannel = None, *, member: discord.Member = None):
-    """
-    ,embed public <name> [#channel] [@member]
-    Sends the saved embed. If description/title has {user}, mention the member.
-
-    Examples:
-      ,embed public greet                     â†’ sends to current channel, no user ping
-      ,embed public greet #welcome            â†’ sends to #welcome
-      ,embed public greet #welcome @NewMember â†’ sends and pings NewMember
-    """
+    await ctx.send(
+        content="🛠️ **Embed Builder**",
+        embed=preview,
+        view=view
+    )
+    @bot.command()
+async def embed_public(ctx, name: str, channel: discord.TextChannel = None):
+    name = name.lower()
     guild_embeds = embed_store.get(ctx.guild.id, {})
-    name = name.strip().lower()
 
     if name not in guild_embeds:
-        await ctx.send(embed=error_embed(
-            "Embed Not Found",
-            f"No embed named `{name}`.\nUse `{PREFIX}embed list` to see all saved embeds."
-        ))
-        return
+        return await ctx.send("❌ Embed not found")
 
-    data       = guild_embeds[name]
-    target_ch  = channel or ctx.channel
-    user_mention = member.mention if member else ""
+    data = guild_embeds[name]
+    target = channel or ctx.channel
 
-    color = int(data.get("color", "9B59B6"), 16)
+    color = int(data.get("color", "5865F2"), 16)
+
     e = discord.Embed(
-        title       = (data.get("title") or "").replace("{user}", user_mention),
-        description = (data.get("description") or "").replace("{user}", user_mention),
-        color       = color,
+        title=data.get("title", ""),
+        description=data.get("description", "").replace("{user}", ctx.author.mention),
+        color=color
     )
+
     if data.get("author_name"):
         e.set_author(name=data["author_name"])
     if data.get("footer"):
@@ -967,75 +1006,8 @@ async def embed_public(ctx, name: str, channel: discord.TextChannel = None, *, m
         e.set_thumbnail(url=data["thumbnail_url"])
     if data.get("image_url"):
         e.set_image(url=data["image_url"])
-    e.timestamp = datetime.datetime.utcnow()
 
-    # If {user} is in the embed we also send the mention as plain text so Discord pings
-    ping_content = user_mention if "{user}" in (data.get("title","") + data.get("description","")) and user_mention else None
-
-    await target_ch.send(content=ping_content, embed=e)
-
-    if target_ch != ctx.channel:
-        await ctx.send(embed=success_embed("Embed Sent", f"Embed **{name}** sent to {target_ch.mention} ðŸ“¨"), delete_after=5)
-
-
-@embed_group.command(name="list")
-async def embed_list(ctx):
-    """Lists all saved embeds for this server."""
-    guild_embeds = embed_store.get(ctx.guild.id, {})
-    if not guild_embeds:
-        await ctx.send(embed=info_embed("ðŸ“‹  Saved Embeds", f"No embeds saved yet.\nUse `{PREFIX}embed create <name>` to make one."))
-        return
-    desc = "\n".join(
-        f"`{i+1}.` **{name}** â€” {data.get('title','(no title)')}"
-        for i, (name, data) in enumerate(guild_embeds.items())
-    )
-    await ctx.send(embed=info_embed("ðŸ“‹  Saved Embeds", desc, color=COLOR_PURPLE))
-
-
-@embed_group.command(name="preview")
-async def embed_preview(ctx, *, name: str):
-    """Preview a saved embed without sending it publicly."""
-    guild_embeds = embed_store.get(ctx.guild.id, {})
-    name = name.strip().lower()
-    if name not in guild_embeds:
-        await ctx.send(embed=error_embed("Not Found", f"No embed named `{name}`."))
-        return
-    data  = guild_embeds[name]
-    color = int(data.get("color", "9B59B6"), 16)
-    e = discord.Embed(
-        title       = (data.get("title") or "").replace("{user}", ctx.author.mention),
-        description = (data.get("description") or "").replace("{user}", ctx.author.mention),
-        color       = color,
-    )
-    if data.get("author_name"):
-        e.set_author(name=data["author_name"])
-    if data.get("footer"):
-        e.set_footer(text=data["footer"])
-    if data.get("thumbnail_url"):
-        e.set_thumbnail(url=data["thumbnail_url"])
-    if data.get("image_url"):
-        e.set_image(url=data["image_url"])
-    e.timestamp = datetime.datetime.utcnow()
-    await ctx.send(content=f"**Preview of `{name}`** (using your mention for `{{user}}`)", embed=e)
-
-
-@embed_group.command(name="delete")
-@commands.has_permissions(manage_messages=True)
-async def embed_delete(ctx, *, name: str):
-    """Delete a saved embed."""
-    guild_embeds = embed_store.get(ctx.guild.id, {})
-    name = name.strip().lower()
-    if name not in guild_embeds:
-        await ctx.send(embed=error_embed("Not Found", f"No embed named `{name}`."))
-        return
-    del guild_embeds[name]
-    await ctx.send(embed=success_embed("Embed Deleted", f"Embed **{name}** has been permanently deleted."))
-
-
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# HOW TO USE â€” paste embed_store = {} in your IN-MEMORY STORAGE block
-# then paste this whole block above bot.run(BOT_TOKEN)
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    await target.send(embed=e)
 # ══════════════════════════════════════════════════════════════════════════════
 # RUN
 # ══════════════════════════════════════════════════════════════════════════════
