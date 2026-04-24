@@ -926,9 +926,7 @@ class EmbedBuilderView(discord.ui.View):
         await interaction.response.send_message("🗑️ Deleted", ephemeral=True)
         self.stop()
 
-    @discord.ui.button(label="need help? join support server!", style=discord.ButtonStyle.link, url="https://discord.gg/yourlink", row=3)
-    async def support(self, interaction, button):
-        pass
+ 
 
 
 # ✅ COMMANDS
