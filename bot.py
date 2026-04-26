@@ -988,6 +988,147 @@ async def embed_public(ctx, name: str, channel: discord.TextChannel = None):
         e.set_image(url=data["image_url"])
 
     await target.send(embed=e)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WEATHER COMMAND
+# Uses Open-Meteo (100% free, no API key needed) + Nominatim for geocoding
+# pip install aiohttp  (already in requirements.txt)
+# Paste this block into bot.py above bot.run(BOT_TOKEN)
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+WEATHER_CODES = {
+    0:  ("☀️", "Clear Sky"),
+    1:  ("🌤️", "Mainly Clear"),
+    2:  ("⛅", "Partly Cloudy"),
+    3:  ("☁️", "Overcast"),
+    45: ("🌫️", "Foggy"),
+    48: ("🌫️", "Icy Fog"),
+    51: ("🌦️", "Light Drizzle"),
+    53: ("🌦️", "Drizzle"),
+    55: ("🌧️", "Heavy Drizzle"),
+    61: ("🌧️", "Light Rain"),
+    63: ("🌧️", "Rain"),
+    65: ("🌧️", "Heavy Rain"),
+    71: ("🌨️", "Light Snow"),
+    73: ("🌨️", "Snow"),
+    75: ("❄️", "Heavy Snow"),
+    80: ("🌦️", "Rain Showers"),
+    81: ("🌧️", "Heavy Showers"),
+    95: ("⛈️", "Thunderstorm"),
+    99: ("⛈️", "Heavy Thunderstorm"),
+}
+ 
+async def geocode(location: str):
+    """Convert location name → (lat, lon, display_name) using Nominatim (free)."""
+    url = f"https://nominatim.openstreetmap.org/search?q={location}&format=json&limit=1"
+    headers = {"User-Agent": "ModBot-Discord/1.0"}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+            if not data:
+                return None
+            return float(data[0]["lat"]), float(data[0]["lon"]), data[0]["display_name"]
+ 
+ 
+async def fetch_weather(lat: float, lon: float) -> dict | None:
+    """Fetch current weather from Open-Meteo (no API key needed)."""
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        f"&current_weather=true"
+        f"&hourly=relativehumidity_2m,apparent_temperature,precipitation_probability,windspeed_10m"
+        f"&timezone=auto&forecast_days=1"
+    )
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status != 200:
+                return None
+            return await resp.json()
+ 
+ 
+@bot.command(name="weather", aliases=["wether", "wthr", "w"])
+async def weather_cmd(ctx, *, location: str):
+    """
+    ,weather <location>
+    Get current weather for any city or place. No API key needed!
+ 
+    Examples:
+      ,weather London
+      ,weather New York
+      ,weather Mumbai
+      ,weather Tokyo
+    """
+    # Show typing indicator while fetching
+    async with ctx.typing():
+        geo = await geocode(location)
+        if not geo:
+            await ctx.send(embed=error_embed(
+                "Location Not Found",
+                f"Couldn't find **{location}**.\nTry a more specific name like `Mumbai, India` or `New York, US`."
+            ))
+            return
+ 
+        lat, lon, display_name = geo
+        data = await fetch_weather(lat, lon)
+        if not data:
+            await ctx.send(embed=error_embed("Weather Unavailable", "Couldn't fetch weather data right now. Try again later."))
+            return
+ 
+        cw        = data["current_weather"]
+        temp_c    = cw["temperature"]
+        temp_f    = round(temp_c * 9/5 + 32, 1)
+        windspeed = cw["windspeed"]
+        code      = cw.get("weathercode", 0)
+        is_day    = cw.get("is_day", 1)
+ 
+        emoji, condition = WEATHER_CODES.get(code, ("🌡️", "Unknown"))
+ 
+        # Grab hourly data for current hour index
+        hourly       = data.get("hourly", {})
+        times        = hourly.get("time", [])
+        tz_now       = data.get("current_weather", {}).get("time", "")[:13]  # "YYYY-MM-DDTHH"
+        hour_index   = 0
+        for i, t in enumerate(times):
+            if t.startswith(tz_now):
+                hour_index = i
+                break
+ 
+        humidity     = hourly.get("relativehumidity_2m", [None])[hour_index]
+        feels_like_c = hourly.get("apparent_temperature", [None])[hour_index]
+        feels_like_f = round(feels_like_c * 9/5 + 32, 1) if feels_like_c is not None else "N/A"
+        rain_chance  = hourly.get("precipitation_probability", [None])[hour_index]
+ 
+        # Pick embed color based on condition
+        if code in [0, 1]:
+            color = 0xF1C40F   # sunny yellow
+        elif code in [61, 63, 65, 80, 81]:
+            color = 0x3498DB   # rainy blue
+        elif code in [71, 73, 75]:
+            color = 0xECF0F1   # snowy white
+        elif code in [95, 99]:
+            color = 0x8E44AD   # stormy purple
+        else:
+            color = 0x5DADE2   # default sky blue
+ 
+        time_label = "🌞 Day" if is_day else "🌙 Night"
+ 
+        e = discord.Embed(
+            title       = f"{emoji}  Weather in {display_name.split(',')[0]}",
+            description = f"**{condition}** • {time_label}",
+            color       = color,
+        )
+        e.add_field(name="🌡️ Temperature",  value=f"`{temp_c}°C` / `{temp_f}°F`",                     inline=True)
+        e.add_field(name="🤔 Feels Like",   value=f"`{feels_like_c}°C` / `{feels_like_f}°F`" if feels_like_c is not None else "N/A", inline=True)
+        e.add_field(name="💧 Humidity",     value=f"`{humidity}%`" if humidity is not None else "N/A", inline=True)
+        e.add_field(name="🌬️ Wind Speed",   value=f"`{windspeed} km/h`",                               inline=True)
+        e.add_field(name="🌧️ Rain Chance",  value=f"`{rain_chance}%`" if rain_chance is not None else "N/A", inline=True)
+        e.add_field(name="📍 Location",     value=f"`{display_name[:50]}...`" if len(display_name) > 50 else f"`{display_name}`", inline=False)
+        e.set_footer(text="ModBot™ Weather • Powered by Open-Meteo & OpenStreetMap • Free & no API key!")
+        e.timestamp = datetime.datetime.utcnow()
+ 
+    await ctx.send(embed=e)
 # ══════════════════════════════════════════════════════════════════════════════
 # RUN
 # ══════════════════════════════════════════════════════════════════════════════
